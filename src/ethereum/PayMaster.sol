@@ -8,19 +8,40 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol";
 
 contract TokenPaymaster is IPaymaster {
+    /*//////////////////////////////////////////////////////////////
+                                 ERROS
+    //////////////////////////////////////////////////////////////*/
+
+    error TokenPaymaster__OnlyEntryPoint();
+    error TokenPaymaster__AllowanceNotEnough();
+    error TokenPaymaster__OnlyOwner();
+    error TokenPaymaster__NotEnoughToken();
+    error TokenPaymaster__FaildTransfer();
+
+
     using UserOperationLib for PackedUserOperation;
     IEntryPoint public immutable entryPoint;
     IERC20 public immutable usdc;
     uint256 public immutable tokenGasPrice; // tokens per gas unit
+    address private immutable i_owner;
 
     constructor(IEntryPoint _entryPoint, IERC20 _usdc, uint256 _tokenGasPrice) {
         entryPoint = _entryPoint;
         usdc = _usdc;
         tokenGasPrice = _tokenGasPrice;
+        i_owner = msg.sender
     }
 
     modifier onlyEntryPoint() {
-        require(msg.sender == address(entryPoint), "Only EntryPoint can call");
+        if(msg.sender == address(entryPoint)){
+            revert TokenPaymaster__OnlyEntryPoint();
+        }
+        _;
+    }
+    modifier onlyOwner() {
+        if(msg.sender == i_owner){
+            revert TokenPaymaster__OnlyOwner();
+        }
         _;
     }
 
@@ -37,14 +58,16 @@ contract TokenPaymaster is IPaymaster {
         address sender = userOp.getSender();
         uint256 tokenCost = maxCost * tokenGasPrice;
 
-        require(
+        if(
             usdc.allowance(sender, address(this)) >= tokenCost,
-            "Insufficient allowance"
-        );
-        require(
+        ){
+            revert TokenPaymaster__AllowanceNotEnough();
+        }
+        if(
             usdc.balanceOf(sender) >= tokenCost,
-            "Insufficient token balance"
-        );
+        ){
+            revert TokenPaymaster__NotEnoughToken();
+        }
 
         // Pack context with info for postOp
         context = abi.encode(sender, tokenCost);
@@ -63,7 +86,9 @@ contract TokenPaymaster is IPaymaster {
         );
 
         bool success = usdc.transferFrom(sender, address(this), tokenCost);
-        require(success, "Token payment failed");
+        if(success){
+            revert TokenPaymaster__FaildTransfer();
+        }
     }
 
     // Utility to deposit ETH into EntryPoint (done by contract owner or dApp)
@@ -72,13 +97,13 @@ contract TokenPaymaster is IPaymaster {
     }
 
     // Optional: withdraw tokens
-    function withdrawTokens(address to, uint256 amount) external {
+    function withdrawTokens(address to, uint256 amount) onlyOwner external {
         // Only owner logic would go here in real implementation
         usdc.transfer(to, amount);
     }
 
     // Optional: withdraw ETH
-    function withdrawEth(address payable to, uint256 amount) external {
+    function withdrawEth(address payable to, uint256 amount) onlyOwner external {
         entryPoint.withdrawTo(to, amount);
     }
 }
