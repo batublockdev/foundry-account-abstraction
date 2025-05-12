@@ -4,10 +4,10 @@ pragma solidity ^0.8.24;
 import {IAccount} from "lib/account-abstraction/contracts/interfaces/IAccount.sol";
 import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstraction/contracts/core/Helpers.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract MinimalAccount is IAccount, Ownable {
     error MinimalAccount__OnlyEntryPoint();
@@ -15,6 +15,7 @@ contract MinimalAccount is IAccount, Ownable {
     error MinimalAccount__CallFailed(bytes result);
 
     IEntryPoint public immutable i_entryPoint;
+    address private immutable i_verifier;
 
     modifier OnlyEntryPoint() {
         if (msg.sender != address(i_entryPoint)) {
@@ -30,8 +31,9 @@ contract MinimalAccount is IAccount, Ownable {
         _;
     }
 
-    constructor(address entryPoint) Ownable(msg.sender) {
+    constructor(address entryPoint, address verifier) Ownable(msg.sender) {
         i_entryPoint = IEntryPoint(entryPoint);
+        i_verifier = verifier;
     }
 
     receive() external payable {}
@@ -62,12 +64,22 @@ contract MinimalAccount is IAccount, Ownable {
         bytes32 userOpHash
     ) internal view returns (uint256 validationData) {
         // Check if the signature is valid
-        bytes32 hash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
-        address signer = ECDSA.recover(hash, userOp.signature);
+        bytes[] memory sigs = abi.decode(userOp.signature, (bytes[]));
+
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(
+            userOpHash
+        );
+        address signer = ECDSA.recover(ethSignedMessageHash, sigs[0]);
+        address signer2 = ECDSA.recover(ethSignedMessageHash, sigs[1]);
+
         if (signer != owner()) {
             return SIG_VALIDATION_FAILED;
         } else {
-            return SIG_VALIDATION_SUCCESS;
+            if (signer2 != i_verifier) {
+                return SIG_VALIDATION_FAILED;
+            } else {
+                return SIG_VALIDATION_SUCCESS;
+            }
         }
     }
 

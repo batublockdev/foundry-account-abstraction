@@ -18,7 +18,6 @@ contract TokenPaymaster is IPaymaster {
     error TokenPaymaster__NotEnoughToken();
     error TokenPaymaster__FaildTransfer();
 
-
     using UserOperationLib for PackedUserOperation;
     IEntryPoint public immutable entryPoint;
     IERC20 public immutable usdc;
@@ -29,17 +28,17 @@ contract TokenPaymaster is IPaymaster {
         entryPoint = _entryPoint;
         usdc = _usdc;
         tokenGasPrice = _tokenGasPrice;
-        i_owner = msg.sender
+        i_owner = msg.sender;
     }
 
     modifier onlyEntryPoint() {
-        if(msg.sender == address(entryPoint)){
+        if (msg.sender == address(entryPoint)) {
             revert TokenPaymaster__OnlyEntryPoint();
         }
         _;
     }
     modifier onlyOwner() {
-        if(msg.sender == i_owner){
+        if (msg.sender == i_owner) {
             revert TokenPaymaster__OnlyOwner();
         }
         _;
@@ -58,14 +57,10 @@ contract TokenPaymaster is IPaymaster {
         address sender = userOp.getSender();
         uint256 tokenCost = maxCost * tokenGasPrice;
 
-        if(
-            usdc.allowance(sender, address(this)) >= tokenCost,
-        ){
+        if (usdc.allowance(sender, address(this)) >= tokenCost) {
             revert TokenPaymaster__AllowanceNotEnough();
         }
-        if(
-            usdc.balanceOf(sender) >= tokenCost,
-        ){
+        if (usdc.balanceOf(sender) >= tokenCost) {
             revert TokenPaymaster__NotEnoughToken();
         }
 
@@ -86,7 +81,7 @@ contract TokenPaymaster is IPaymaster {
         );
 
         bool success = usdc.transferFrom(sender, address(this), tokenCost);
-        if(success){
+        if (success) {
             revert TokenPaymaster__FaildTransfer();
         }
     }
@@ -97,13 +92,16 @@ contract TokenPaymaster is IPaymaster {
     }
 
     // Optional: withdraw tokens
-    function withdrawTokens(address to, uint256 amount) onlyOwner external {
+    function withdrawTokens(address to, uint256 amount) external onlyOwner {
         // Only owner logic would go here in real implementation
         usdc.transfer(to, amount);
     }
 
     // Optional: withdraw ETH
-    function withdrawEth(address payable to, uint256 amount) onlyOwner external {
+    function withdrawEth(
+        address payable to,
+        uint256 amount
+    ) external onlyOwner {
         entryPoint.withdrawTo(to, amount);
     }
 }
