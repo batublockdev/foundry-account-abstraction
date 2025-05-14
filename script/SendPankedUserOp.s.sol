@@ -129,4 +129,88 @@ contract SendPackedUserOp is Script {
                 signature: hex""
             });
     }
+
+    /*//////////////////////////////////////////////////////////////
+                               PAYMASTER
+    //////////////////////////////////////////////////////////////*/
+    function generateSignedUserOperationPayMaster(
+        bytes memory callData,
+        HelperConfig.NetworkConfig memory config,
+        address minimalAccount,
+        address paymaster
+    ) public view returns (PackedUserOperation memory) {
+        // 1. Generate the unsigned data
+        address sender = config.account[0];
+        uint256 nonce = vm.getNonce(minimalAccount) - 1;
+        PackedUserOperation
+            memory userOp = _generateUnsignedUserOperationPayMaster(
+                callData,
+                minimalAccount,
+                paymaster,
+                nonce
+            );
+
+        // 2. Get the userOp Hash
+        bytes32 userOpHash = IEntryPoint(config.entryPoint).getUserOpHash(
+            userOp
+        );
+        bytes32 digest = userOpHash.toEthSignedMessageHash();
+
+        // 3. Sign it
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+
+        uint8 v2;
+        bytes32 r2;
+        bytes32 s2;
+
+        uint256 ANVIL_DEFAULT_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
+        uint256 ANVIL_DEFAULT_KEY2 = 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d;
+        if (block.chainid == 31337) {
+            (v, r, s) = vm.sign(ANVIL_DEFAULT_KEY, digest);
+            (v2, r2, s2) = vm.sign(ANVIL_DEFAULT_KEY2, digest);
+        } else {
+            (v, r, s) = vm.sign(sender, digest);
+        }
+        bytes[] memory sigs = new bytes[](2);
+        sigs[0] = abi.encodePacked(r, s, v);
+        sigs[1] = abi.encodePacked(r2, s2, v2);
+        //userOp.signature = abi.encodePacked(r, s, v); // Note the order
+        userOp.signature = abi.encode(sigs); // Note the order
+        return userOp;
+    }
+
+    function _generateUnsignedUserOperationPayMaster(
+        bytes memory callData,
+        address sender,
+        address paymaster,
+        uint256 nonce
+    ) internal pure returns (PackedUserOperation memory) {
+        uint128 verificationGasLimit = 16777216;
+        uint128 callGasLimit = verificationGasLimit;
+        uint128 maxPriorityFeePerGas = 256;
+        uint128 maxFeePerGas = maxPriorityFeePerGas;
+        bytes memory paymasterData = abi.encodePacked(
+            paymaster,
+            verificationGasLimit,
+            verificationGasLimit
+        );
+        return
+            PackedUserOperation({
+                sender: sender,
+                nonce: nonce,
+                initCode: hex"",
+                callData: callData,
+                accountGasLimits: bytes32(
+                    (uint256(verificationGasLimit) << 128) | callGasLimit
+                ),
+                preVerificationGas: verificationGasLimit,
+                gasFees: bytes32(
+                    (uint256(maxPriorityFeePerGas) << 128) | maxFeePerGas
+                ),
+                paymasterAndData: paymasterData,
+                signature: hex""
+            });
+    }
 }

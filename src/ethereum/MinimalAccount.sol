@@ -8,6 +8,7 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstraction/contracts/core/Helpers.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MinimalAccount is IAccount, Ownable {
     error MinimalAccount__OnlyEntryPoint();
@@ -51,7 +52,7 @@ contract MinimalAccount is IAccount, Ownable {
         address target,
         uint256 value,
         bytes calldata data
-    ) external OnlyEntryPoint {
+    ) external OnlyEntryPointOrOwner {
         // Execute the transaction
         (bool success, bytes memory result) = target.call{value: value}(data);
         if (!success) {
@@ -96,5 +97,9 @@ contract MinimalAccount is IAccount, Ownable {
 
     function getIEntryPoint() external view returns (address) {
         return address(i_entryPoint);
+    }
+
+    function getIVerifier() external view returns (address) {
+        return i_verifier;
     }
 }

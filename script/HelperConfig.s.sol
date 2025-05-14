@@ -5,6 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {EntryPoint} from "lib/account-abstraction/contracts/core/EntryPoint.sol";
 import {console2} from "forge-std/console2.sol";
 import {ERC20Mock} from "test/mock/ERC20Mock.sol";
+import {MockV3Aggregator} from "../test/mock/MockV3Aggregator.sol";
 
 contract HelperConfig is Script {
     error HelperConig__InvalidChainId();
@@ -13,8 +14,10 @@ contract HelperConfig is Script {
         address entryPoint;
         address usd;
         address[2] account;
+        address priceFeed;
     }
-
+    uint8 public constant DECIMALS = 8;
+    int256 public constant ETH_USD_PRICE = 2000e8;
     uint256 constant ETH_SEPOLIA_CHAIN_ID = 155111;
     uint256 constant ZKSYNC_SEPOLIA_CHAIN_ID = 300;
     uint256 constant LOCAL_CHAIN_ID = 31337;
@@ -28,7 +31,8 @@ contract HelperConfig is Script {
         NetworkConfig({
             entryPoint: address(0),
             usd: address(0),
-            account: [address(0), address(0)]
+            account: [address(0), address(0)],
+            priceFeed: address(0)
         });
     mapping(uint256 chainId => NetworkConfig) networkCOnfigs;
 
@@ -59,7 +63,8 @@ contract HelperConfig is Script {
             NetworkConfig({
                 entryPoint: 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789,
                 usd: address(0),
-                account: [address(0), address(0)]
+                account: [address(0), address(0)],
+                priceFeed: address(0)
             });
     }
 
@@ -72,7 +77,8 @@ contract HelperConfig is Script {
             NetworkConfig({
                 entryPoint: address(0),
                 usd: address(0),
-                account: [address(0), address(0)]
+                account: [address(0), address(0)],
+                priceFeed: address(0)
             });
     }
 
@@ -88,8 +94,12 @@ contract HelperConfig is Script {
         ERC20Mock usdc = new ERC20Mock(
             "USD Coin",
             "USDC",
-            6,
+            100,
             address(entryPoint)
+        );
+        MockV3Aggregator ethUsdPriceFeed = new MockV3Aggregator(
+            DECIMALS,
+            ETH_USD_PRICE
         );
         vm.stopBroadcast();
         console2.log("Mocks deployed!");
@@ -97,7 +107,8 @@ contract HelperConfig is Script {
         localNetworkConfig = NetworkConfig({
             entryPoint: address(entryPoint),
             usd: address(usdc),
-            account: [ANVIL_DEFAULT_ACCOUNT, ANVIL_DEFAULT_ACCOUNT2]
+            account: [ANVIL_DEFAULT_ACCOUNT, ANVIL_DEFAULT_ACCOUNT2],
+            priceFeed: address(ethUsdPriceFeed)
         });
 
         return localNetworkConfig;

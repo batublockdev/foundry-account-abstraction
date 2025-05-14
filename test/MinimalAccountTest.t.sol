@@ -5,9 +5,9 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {MinimalAccount} from "src/ethereum/MinimalAccount.sol";
-import {DeployMinimal} from "script/DeploMinimal.s.sol";
+import {DeployMinimal} from "script/DeployMinimal.s.sol";
 import {HelperConfig} from "script/HelperConfig.s.sol";
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {ERC20Mock} from "./mock/ERC20Mock.sol";
 import {SendPackedUserOp, PackedUserOperation, IEntryPoint} from "script/SendPankedUserOp.s.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -36,7 +36,8 @@ contract MinimalAccountTest is Test, ZkSyncChainChecker {
     function setUp() public skipZkSync {
         DeployMinimal deployMinimal = new DeployMinimal();
         (helperConfig, minimalAccount) = deployMinimal.deployMinimalAccount();
-        usdc = new ERC20Mock();
+        HelperConfig.NetworkConfig memory config = helperConfig.getConfig();
+        usdc = ERC20Mock(config.usd);
         sendPackedUserOp = new SendPackedUserOp();
     }
 
@@ -75,9 +76,9 @@ contract MinimalAccountTest is Test, ZkSyncChainChecker {
         );
         // Act
         vm.prank(randomuser);
-        /*vm.expectRevert(
-            MinimalAccount.MinimalAccount__NotFromEntryPointOrOwner.selector
-        );*/
+        vm.expectRevert(
+            MinimalAccount.MinimalAccount__OnlyEntryPointOrOwner.selector
+        );
         minimalAccount.execute(dest, value, functionData);
     }
 
@@ -108,13 +109,18 @@ contract MinimalAccountTest is Test, ZkSyncChainChecker {
         ).getUserOpHash(packedUserOp);
 
         // Act
-        address actualSigner = ECDSA.recover(
-            userOperationHash.toEthSignedMessageHash(),
-            packedUserOp.signature
+
+        bytes[] memory sigs = abi.decode(packedUserOp.signature, (bytes[]));
+
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(
+            userOperationHash
         );
+        address signer = ECDSA.recover(ethSignedMessageHash, sigs[0]);
+        address signer2 = ECDSA.recover(ethSignedMessageHash, sigs[1]);
 
         // Assert
-        assertEq(actualSigner, minimalAccount.owner());
+        assertEq(signer, minimalAccount.owner());
+        assertEq(signer2, minimalAccount.getIVerifier());
     }
 
     // 1. Sign user ops
