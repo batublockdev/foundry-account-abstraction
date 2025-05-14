@@ -1,66 +1,115 @@
-## Foundry
+# MinimalAccount + PayMaster (ERC-4337 Smart Wallet w/ USDC Gas Abstraction & Verifier)
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This project implements a **minimal ERC-4337 Account Abstraction wallet** paired with a **custom Paymaster** contract that allows users to pay for gas in **USDC**, verified against the current ETH/USD price using **Chainlink oracles**.
 
-Foundry consists of:
+---
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## ✨ Features
 
-## Documentation
+- ✅ ERC-4337 compliant smart account (`MinimalAccount`)
+- 🧠 Multi-sig-like execution flow (owner + verifier)
+- 💸 Pay gas in **USDC** using a **custom Paymaster**
+- 🧮 Real-time price conversion using **Chainlink ETH/USD oracle**
+- 🛡️ Security-focused with strict access modifiers (`onlyOwner`, `onlyEntryPoint`)
+- 🧰 Built using Foundry, OpenZeppelin, and `account-abstraction` package
 
-https://book.getfoundry.sh/
+---
 
-## Usage
+## 🧱 Contracts
 
-### Build
+### 🔐 MinimalAccount.sol
 
-```shell
-$ forge build
+Smart contract wallet that implements `IAccount`:
+
+- Validates two signatures: `owner` and `verifier`
+- Supports execution of arbitrary `target.call(data)`
+- Provides `OnlyEntryPointOrOwner` access control
+- Used with EntryPoint to bundle and execute UserOperations
+
+```solidity
+constructor(address entryPoint, address verifier) Ownable(msg.sender)
 ```
 
-### Test
+### 💸 PayMaster.sol
 
-```shell
-$ forge test
+ERC-4337 `IPaymaster` implementation that allows the user to:
+
+- Pay gas fees in **USDC**, not ETH
+- Automatically calculates required USDC based on live ETH/USD price
+- Uses Chainlink’s `AggregatorV3Interface` with `staleCheckLastTestRoundData()` for secure price feeds
+
+```solidity
+constructor(address _entryPoint, address _usdc, address _ethPriceFeed)
 ```
 
-### Format
+---
 
-```shell
-$ forge fmt
+## 🔄 Signature Verification Flow
+
+```solidity
+address signer = ECDSA.recover(toEthSignedMessageHash(userOpHash), sigs[0]);
+address signer2 = ECDSA.recover(toEthSignedMessageHash(userOpHash), sigs[1]);
 ```
 
-### Gas Snapshots
+A transaction is only valid if:
+- `signer == owner()`
+- `signer2 == i_verifier`
 
-```shell
-$ forge snapshot
-```
+---
 
-### Anvil
+## 💰 USDC Gas Payment Logic
 
-```shell
-$ anvil
-```
+1. `validatePaymasterUserOp`:
+    - Gets ETH/USD price via Chainlink
+    - Calculates USDC cost of maxGas
+    - Verifies sender has sufficient USDC and allowance
 
-### Deploy
+2. `postOp`:
+    - Transfers USDC from user to Paymaster
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
+---
 
-### Cast
+## 🧪 Deployment Notes
 
-```shell
-$ cast <subcommand>
-```
+- Deploy `MinimalAccount` with EntryPoint and Verifier addresses
+- Deploy `PayMaster` with EntryPoint, USDC, and Chainlink ETH/USD price feed addresses
+- Fund the Paymaster using `depositToEntryPoint()` for ETH coverage
 
-### Help
+---
 
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+## 🛠️ Admin Functions
+
+| Function | Description |
+|---------|-------------|
+| `withdrawTokens()` | Transfer USDC to owner |
+| `withdrawEth()` | Withdraw deposited ETH from EntryPoint |
+| `depositToEntryPoint()` | Deposit ETH into EntryPoint for covering user ops |
+
+---
+
+## 🔐 Access Control
+
+- Only the **EntryPoint** can call `validatePaymasterUserOp` and `postOp`
+- Only the **owner** can withdraw tokens/ETH or interact directly
+
+---
+
+## 📚 Tech Stack
+
+- Solidity `^0.8.20`
+- [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts)
+- [Chainlink ETH/USD Oracle](https://docs.chain.link/)
+- [ERC-4337 Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337)
+- [Foundry](https://book.getfoundry.sh/)
+
+---
+
+## 📄 License
+
+MIT
+
+---
+
+## 🙌 Credits
+
+Created by @batublockdev. Special thanks to the OpenZeppelin, Chainlink, and ERC-4337 contributors.
